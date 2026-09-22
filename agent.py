@@ -17,8 +17,82 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+
+# ✏️ Build 2, step 2.1 ─────────────────────────────────────────────────────
+# get_care_options: local tool added by Laila Srikrishnan
+# Triggered on cancellations where the customer may be stuck overnight.
+# Reviews policy coverage first, then returns hotel and insurance options.
+
+def get_care_options(airport_code: str, pnr: str) -> dict:
+    """Return nearby hotel options with distressed-passenger rates and
+    available travel insurance add-ons for a customer facing a cancellation.
+    Only call this after a cancellation is confirmed and policy has been checked."""
+    HOTELS = {
+        "AUS": [
+            {"name": "Hyatt Place Austin Airport", "distance_miles": 0.5,
+             "distressed_rate_usd": 89, "booking_code": "LK-DIST-AUS-HYP"},
+            {"name": "Hilton Garden Inn Austin Airport", "distance_miles": 1.2,
+             "distressed_rate_usd": 99, "booking_code": "LK-DIST-AUS-HGI"},
+        ],
+        "DEN": [
+            {"name": "Westin Denver International", "distance_miles": 0.1,
+             "distressed_rate_usd": 109, "booking_code": "LK-DIST-DEN-WST"},
+            {"name": "Marriott Denver Airport", "distance_miles": 0.3,
+             "distressed_rate_usd": 119, "booking_code": "LK-DIST-DEN-MAR"},
+        ],
+        "BNA": [
+            {"name": "Aloft Nashville Airport", "distance_miles": 0.4,
+             "distressed_rate_usd": 85, "booking_code": "LK-DIST-BNA-ALF"},
+        ],
+    }
+    INSURANCE = [
+        {"product": "Trip Interruption Cover", "cost_usd": 29,
+         "covers": "Hotel up to $200/night for 3 nights, meals up to $50/day"},
+        {"product": "Flex Cancel Add-on", "cost_usd": 15,
+         "covers": "Rebooking fee waiver on next Larkspur booking"},
+    ]
+    hotels = HOTELS.get(airport_code.upper(), [])
+    if not hotels:
+        hotels = [{"note": f"No pre-negotiated rates on file for {airport_code}. "
+                           "Ask customer to request distressed-passenger rate at check-in."}]
+    return {
+        "pnr": pnr,
+        "airport": airport_code.upper(),
+        "nearby_hotels": hotels,
+        "travel_insurance_options": INSURANCE,
+        "note": "Hotel costs are not covered by Larkspur for uncontrollable cancellations. "
+                "Present these as options the customer can book themselves at reduced rates.",
+    }
+
+EXTRA_TOOLS: List[Dict[str, Any]] = [
+    {
+        "name": "get_care_options",
+        "description": (
+            "Always call this when a flight is cancelled, after check_policy has run. "
+            "Review what policy covers and recommend hotel and insurance options based on "
+            "that coverage — so the customer is never left without choices, whether or not "
+            "Larkspur pays. If hotel is not policy-covered, this tool returns distressed-"
+            "passenger rates the customer can book themselves. Call it before giving your "
+            "final answer on any cancellation, so the customer does not leave the "
+            "conversation at a disadvantage. Do NOT call for delays under 3 hours."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "airport_code": {
+                    "type": "string",
+                    "description": "IATA code of the airport where the customer is stranded (from lookup_booking home_airport or segment origin).",
+                },
+                "pnr": {"type": "string"},
+            },
+            "required": ["airport_code", "pnr"],
+        },
+    }
+]
+
+LOCAL_TOOLS: Dict[str, Any] = {
+    "get_care_options": get_care_options,
+}
 
 
 def text_of(response) -> str:
@@ -65,25 +139,23 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
         thinking={"type": "adaptive"}, tools=tools, messages=messages,
     )
 
-    answer = ""
     turns = 1
     while response.stop_reason == "tool_use" and turns < MAX_TOOL_CALLS:
-        messages.append({"role": "assistant", "content": text_of(response)})
+        messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results(response)})
-        answer = text_of(response)
         response = client.messages.create(
             model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
             thinking={"type": "adaptive"}, tools=tools, messages=messages,
         )
         turns += 1
 
-    return answer
+    return text_of(response)
 
 
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
     """Given. Exactly what Claude is offered on every turn; run.py --show-tools
     prints this list."""
-    return build_tools() + EXTRA_TOOLS
+    return build_tools() + EXTRA_TOOLS + mcp_client.tools()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -119,14 +191,20 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
                 "type": "object",
                 "properties": {
                     "flight_no": {"type": "string"},
-                    "date": {"type": "string", "description": "MM/DD/YYYY"},
+                    "date": {"type": "string", "description": "YYYY-MM-DD"},
                 },
                 "required": ["flight_no", "date"],
             },
         },
         {
             "name": "search_alternatives",
-            "description": "search",
+            "description": (
+                "Search for alternative Larkspur flights available for rebooking after a "
+                "disruption. Call this after you know the flight is delayed or cancelled and "
+                "the customer wants to be rebooked — not before you have confirmed the "
+                "disruption with get_flight_status. Returns a list of option_ids with "
+                "available flights the customer can choose from."
+            ),
             "input_schema": {
                 "type": "object",
                 "properties": {"pnr": {"type": "string"}},

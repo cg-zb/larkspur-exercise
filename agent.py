@@ -16,7 +16,14 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
-TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
+TONE_ADDENDUM = """
+
+TONE AND ESCALATION RULES (apply before any entitlements logic):
+- If the customer uses abusive language OR makes any legal threat ("lawyer", "sue", "legal action", "court"), do NOT run a normal entitlements response.
+- Acknowledge their frustration once, briefly. Do not apologise for things Larkspur did not cause.
+- Call escalate_to_human immediately. Set reason to "legal_threat" or "abusive_language" as appropriate. In summary_for_human, quote the customer's exact message verbatim so the human agent has a record of what was said.
+- Promise nothing. Do not offer refunds, vouchers, or rebooking options when a legal threat has been made — doing so prejudices Larkspur's position.
+"""                                      # ✏️ Build 4, step 4.1, intelligence goal
 
 # ✏️ Build 2, step 2.1 ─────────────────────────────────────────────────────
 # get_care_options: local tool added by Laila Srikrishnan

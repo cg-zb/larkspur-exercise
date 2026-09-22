@@ -81,8 +81,9 @@ def run(trace: bool) -> int:
     raw = mcp.list_tools()
     timings["tools/list"] = time.time() - t0
     names = [t["name"] for t in raw]
-    check(set(names) == {"next_available_day", "fare_rules"},
-          "tools/list returned both tools", ", ".join(names))
+    check(set(names) == {"next_available_day", "fare_rules", "reopen_stats",
+                         "care_entitlements", "cause_in_plain_words"},
+          "tools/list returned all tools", ", ".join(names))
     check(mcp.tool_names == names, "tool_names tracks what came over MCP",
           str(mcp.tool_names))
 
@@ -159,14 +160,15 @@ def run(trace: bool) -> int:
         check(old.server_info.get("name") == "larkspur-ops",
               "initialize returned serverInfo")
         legacy_names = [t["name"] for t in old.list_tools()]
-        check(set(legacy_names) == {"next_available_day", "fare_rules"},
+        check(set(legacy_names) == {"next_available_day", "fare_rules", "reopen_stats",
+                                     "care_entitlements", "cause_in_plain_words"},
               "tools/list works after the legacy handshake", ", ".join(legacy_names))
 
     # -- 8. module-level helpers, the ones agent.py uses ------------------
     t0 = time.time()
     module_schemas = mcp_client.discover()
     timings["module discover()"] = time.time() - t0
-    check(len(module_schemas) == 2, "module-level discover() found both tools")
+    check(len(module_schemas) == 5, "module-level discover() found all tools")
     check("next_available_day" in mcp_client.tool_names,
           "module-level tool_names is populated", str(sorted(mcp_client.tool_names)))
     t0 = time.time()

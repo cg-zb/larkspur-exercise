@@ -141,8 +141,16 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
         {"role": "user", "content": f"PNR {pnr}, last name {last_name}. {message}"},
     ]
 
+    system = [
+        {
+            "type": "text",
+            "text": runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
     response = client.messages.create(
-        model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
+        model=MODEL, max_tokens=4096, system=system,
         thinking={"type": "adaptive"}, tools=tools, messages=messages,
     )
 
@@ -151,7 +159,7 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results(response)})
         response = client.messages.create(
-            model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
+            model=MODEL, max_tokens=4096, system=system,
             thinking={"type": "adaptive"}, tools=tools, messages=messages,
         )
         turns += 1
@@ -159,10 +167,14 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
     return text_of(response)
 
 
+_SUPERVISOR_TOOLS = {"reopen_stats", "care_entitlements"}  # analytics/duplicate — drop from per-contact list
+
+
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
     """Given. Exactly what Claude is offered on every turn; run.py --show-tools
     prints this list."""
-    return build_tools() + EXTRA_TOOLS + mcp_client.tools()
+    mcp_tools = [t for t in mcp_client.tools() if t["name"] not in _SUPERVISOR_TOOLS]
+    return build_tools() + EXTRA_TOOLS + mcp_tools
 
 
 # ──────────────────────────────────────────────────────────────────────────────

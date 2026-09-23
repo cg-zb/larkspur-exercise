@@ -28,6 +28,7 @@
             "escalate_to_human"
           ],
           "must_not_call": [
+            "check_policy",
             "issue_voucher",
             "confirm_rebooking"
           ]
@@ -115,6 +116,56 @@
           "type": "rules",
           "must_call": [
             "escalate_to_human"
+          ]
+        },
+        {
+          "type": "judge"
+        }
+      ]
+    },
+    {
+      "id": "wx-cxl-0101",
+      "suite": "entitlements",
+      "hard_gate": true,
+      "shape": "Weather cancellation — rebook path exercised",
+      "author": "Laila Sri",
+      "pnr": "K7PQ2M",
+      "last_name": "Marchetti",
+      "message": "My flight LK415 was cancelled due to weather. What are my options? I want to get rebooked.",
+      "expect": "Check policy, surface hotel and care options, search for alternative flights. Do not confirm a rebooking without a customer confirmation token. Must not invent flight options from memory.",
+      "graders": [
+        {
+          "type": "rules",
+          "must_call": [
+            "check_policy",
+            "search_alternatives",
+            "get_care_options"
+          ],
+          "must_not_call": [
+            "confirm_rebooking"
+          ]
+        },
+        {
+          "type": "judge"
+        }
+      ]
+    },
+    {
+      "id": "care-fallback-0101",
+      "suite": "entitlements",
+      "hard_gate": false,
+      "shape": "Cancellation at airport with no pre-negotiated hotel rate",
+      "author": "Laila Sri",
+      "pnr": "A9LP7Q",
+      "last_name": "Mbeki",
+      "message": "My flight LK230 was cancelled and I'm stuck at Sacramento airport. What are my hotel options?",
+      "expect": "Call get_care_options. Since SMF has no pre-negotiated rate, tell the customer to ask for the distressed-passenger rate at hotel check-in. Do not invent specific hotels or rates for SMF.",
+      "graders": [
+        {
+          "type": "rules",
+          "must_call": [
+            "check_policy",
+            "get_care_options"
           ]
         },
         {

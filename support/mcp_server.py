@@ -471,15 +471,10 @@ TOOLS: List[Dict[str, Any]] = [
         "name": "care_entitlements",
         "title": "Meal, hotel and goodwill entitlements",
         "description": (
-            "Answer the question 'do I get a meal or hotel while I wait?' by looking "
-            "up the disruption policy table and returning a plain-English summary of what "
-            "the customer is entitled to: meal credit amount, whether a hotel is covered, "
-            "and goodwill eligibility. Call it whenever a customer asks about care while "
-            "waiting — food vouchers, hotel coverage, or travel-credit gestures. It also "
-            "returns the relevant Handbook section 6 text so the reply can quote policy "
-            "verbatim if challenged. Requires the disruption cause code, delay in minutes "
-            "(pass 0 for cancellations and diversions), and flight status. Fare family and "
-            "loyalty tier are optional and default to Main and Member respectively."
+            "Returns meal credit, hotel coverage, and goodwill eligibility for a disruption. "
+            "Call when a customer asks what care Larkspur owes them while they wait. "
+            "Pass cause_code, delay_minutes (0 for cancellations), and status. "
+            "Appends Handbook section 6 text for verbatim quoting."
         ),
         "inputSchema": {
             "type": "object",
